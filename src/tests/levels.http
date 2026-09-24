@@ -1,0 +1,24 @@
+### Récupération de tous les levels
+GET http://localhost:4000/api/levels
+
+### Récupération d'un level par son ID
+GET http://localhost:4000/api/levels/99
+
+### Création d'un level
+POST http://localhost:4000/api/levels
+Content-Type: application/json
+
+{
+    "name": "facile"
+}
+
+### Modification d'un level par son ID
+PATCH http://localhost:4000/api/levels/999
+Content-Type: application/json
+
+{
+    "name": "Hardcore"
+}
+
+### Suppression d'un level par son ID
+DELETE http://localhost:4000/api/levels/5

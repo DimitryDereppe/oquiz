@@ -1,0 +1,78 @@
+# -------------
+# ** Déclaration des containers **
+# -------------
+
+
+services:
+  # =============
+  # ** MONGODB **
+  # =============
+
+  mongodb: # nom du container
+    image: mongo:8.0 # l'image utilisée pour démarrer le container
+    restart: unless-stopped
+    environment:
+      # Hack pour contournement TCMalloc avec noyaux Linux recents.
+      GLIBC_TUNABLES: glibc.pthread.rseq=1
+    networks:
+      - log-service-network
+    ports:
+      # <PORT_MACHINE_HOTE>:<PORT_CONTAINER>
+      - ${MONGO_PORT}:27017
+    volumes:
+      - mongodb-volume:/data/db
+
+  # =============
+  # ** MONGODB **
+  # =============
+
+  mongo-express: # nom du container
+    image: mongo-express:latest # l'image utilisée pour démarrer le container
+    restart: unless-stopped
+    environment:
+      ME_CONFIG_MONGODB_URL: mongodb://mongodb:27017/
+      ME_CONFIG_BASICAUTH_ENABLED: "false" # pas de login / mdp
+      ME_CONFIG_BASICAUTH: "false" # Compatibilité avec les versions antérieures
+    networks:
+      - log-service-network
+    ports:
+      - ${MONGO_EXPRESS_PORT}:8081
+    depends_on:
+      - mongodb # attents le démarrage du container mongodb pour démarrer
+
+
+# -------------
+# ** Déclaration des volumes **
+# -------------
+
+volumes:
+  mongodb-volume:
+
+
+# -------------
+# ** Déclaration des réseaux **
+# -------------
+
+networks:
+  log-service-network:
+
+
+
+# Pour lancer ce docker-compose --> démarrer tous les containers :
+# > docker compose -f ./docker-compose.yml --env-file=.env.docker up -d
+
+
+# Pour arrêter les containers
+# > docker compose -f ./docker-compose.yml --env-file=.env.docker down
+
+
+# L'option -f permet de renseigner le fichier compose
+# L'option --env-file permet de renseigner le fichier de variable d'environnement
+
+# Pour vérifier si les containers sont bien démarrés
+# > docker ps
+# La commande affiche la liste des containes en cours d'exécution
+
+# Ne pas oublier de lancer les container avant de démarrer l'API et tous les autres micro-services
+
+

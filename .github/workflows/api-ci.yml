@@ -1,0 +1,53 @@
+# Objectif de ce workflow
+# - Lancer les tests
+# - Build le back
+
+# Nom du workflow (affiché sur Github)
+name: Run integration tests on API
+
+# Définir les évènements qui déclenche le workflow
+# Le "comment" ça se lance
+on:
+  push: # Un push ou un merge va déclencher le workflow
+    branches:
+      - main
+      - master
+  pull_request: # La création d'une PR vers main va déclencher le workflow
+    branches:
+      - main
+      - master
+
+# Suites d'étapes qui s'éxécute dans un runner
+# C'est le "Qu'est ce que fait mon workflow"
+jobs:
+  # Nom du job (ce qu'on veut)
+  run_api_tests:
+    # Choix du runner
+    runs-on: ubuntu-latest
+    # Empeche husky de se lancer dans github actions
+    # Github Actions n'aime pas Husky, il faut donc l'empecher de le lancer avec ces 2 lignes
+    env:
+      HUSKY: 0
+    # Étapes du job
+    steps:
+      # Récupérer le code du dépôt et on le place dans le runner (action officiel) (c'est une copie)
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      # Mettre en place Node.js
+      - name: Install Node 22
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22' # Spécifie la version de Node.js
+
+      # Installer les dépendances
+      - name: Install dependencies
+        run: npm install --prefix ./src/api
+
+      # Generate Prisma Client
+      - name: Generate Prisma Client
+        run: npm run db:generate --prefix ./src/api
+
+      # Exécuter les tests
+      - name: Run tests
+        run: npm run test --prefix ./src/api

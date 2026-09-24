@@ -1,0 +1,16 @@
+@baseUrl = https://api.oquiz.test
+
+### Envoyer une image JPEG
+POST {{baseUrl}}/api/files
+Content-Type: multipart/form-data; boundary=UploadBoundary
+
+--UploadBoundary
+Content-Disposition: form-data; name="image"; filename="sample.jpg"
+Content-Type: image/jpeg
+
+< ./sample.jpg
+--UploadBoundary--
+
+
+# Alternative avec une commande curl (curl envoie des requetes HTTP depuis le terminal) :
+curl -X POST "https://api.oquiz.test/api/files" -F "image=@./sample.jpg;type=image/jpeg"

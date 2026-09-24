@@ -1,0 +1,198 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider        = "prisma-client"
+  output          = "../generated/prisma"
+  previewFeatures = ["partialIndexes"] // pour ajouter des contraintes qui portent sur plusieurs colonnes à la fois
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  member
+  author
+  admin
+}
+
+// ---
+
+model User {
+  id        Int    @id @default(autoincrement())
+  email     String @unique @db.VarChar(128)
+  firstname String @db.VarChar(128)
+  lastname  String @db.VarChar(128)
+  password  String @db.VarChar(256)
+
+  createdAt DateTime @default(now()) @map("createdAt") @db.Timestamptz
+  updatedAt DateTime @default(now()) @updatedAt @map("updatedAt") @db.Timestamptz
+
+  role Role @default(member)
+
+  refreshTokens RefreshToken[] // référence inverse vers RefreshToken
+  quizzes       Quiz[] // référence inverse vers Quiz
+  attemps       Attempt[] // référence inverse vers Attempt
+  tags          Tag[] // référence inverse vers Tag
+
+  @@map("users")
+}
+
+// ---
+
+model Level {
+  id Int @id @default(autoincrement())
+
+  name String @unique @db.VarChar(50)
+
+  createdAt DateTime @default(now()) @map("createdAt") @db.Timestamptz
+  updatedAt DateTime @default(now()) @updatedAt @map("updatedAt") @db.Timestamptz
+
+  questions Question[]
+
+  @@map("levels")
+}
+
+// ---
+
+model Quiz {
+  id          Int     @id @default(autoincrement())
+  title       String
+  description String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+
+  author    User @relation(fields: [authorId], references: [id])
+  authorId Int
+
+  questions Question[]
+  tags      QuizHasTag[]
+  Attempt   Attempt[]
+
+  @@map("quizzes")
+}
+
+// ---
+
+model Question {
+  id          Int     @id @default(autoincrement())
+  description String
+  anecdote    String?
+  wikiLink   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+
+  quiz    Quiz @relation(fields: [quizId], references: [id])
+  quizId Int
+
+  choices Choice[]
+
+  level    Level? @relation(fields: [levelId], references: [id])
+  levelId Int?
+
+  @@map("questions")
+}
+
+// ---
+
+model Choice {
+  id          Int     @id @default(autoincrement())
+  description String
+  isValid    Boolean
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+
+  question    Question @relation(fields: [questionId], references: [id])
+  questionId Int
+
+  @@map("choices")
+}
+
+// ---
+
+model Tag {
+  id    Int     @id @default(autoincrement())
+  name  String  @unique
+  color String? @default("#ffffff") @db.VarChar(7) // optionnel, couleur par défaut blanc
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+
+  // 1 Tag est créé par 1 auteur (User) 
+  // 1 auteur (User) édite N Tag
+  author    User @relation(fields: [authorId], references: [id])
+  authorId Int
+
+  parentTag    Tag? @relation("TagHasSubTag", fields: [parentTagId], references: [id])
+  parentTagId Int?
+
+  childrenTags Tag[] @relation("TagHasSubTag")
+
+  quizzes QuizHasTag[]
+
+  @@map("tags")
+}
+
+// ---
+
+model QuizHasTag {
+  quiz    Quiz @relation(fields: [quizId], references: [id])
+  quizId Int
+
+  tag    Tag @relation(fields: [tagId], references: [id])
+  tagId Int
+
+  @@id([quizId, tagId])
+  @@map("quiz_has_tag")
+}
+
+// ---
+
+model Attempt {
+  id        Int @id @default(autoincrement())
+  score     Int
+  maxScore Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+
+  user    User @relation(fields: [userId], references: [id])
+  userId Int
+
+  quiz    Quiz @relation(fields: [quizId], references: [id])
+  quizId Int
+
+  @@map("attempts")
+}
+
+// ---
+
+// 1 RefreshToken référence 1 User
+// 1 User possède 0 ou 1 RefreshToken
+// ---
+// FIXME Attention ce modèle est une version simple où un utilisateur ne peux se connecter qu'avec un seul appareil à la fois !
+// pour se protéger du vol de token + autoriser plusieurs connexions à la fois il faut ajouter la gestion de sessions utilisateur dans le modèle.
+// Pour aller plus loin : https://www.rfc-editor.org/rfc/rfc9700.html#section-4.14.2
+model RefreshToken {
+  id Int @id @default(autoincrement())
+
+  tokenHash String  @unique // on ne stock pas les token en clair !
+  consumed  Boolean @default(false) // token utilisé ou pas
+
+  // relation : https://www.prisma.io/docs/orm/v7/prisma-schema/data-model/relations/relation-mode
+  userId Int // foreign key
+  user    User @relation(fields: [userId], references: [id]) // Alias vers User
+
+  issuedAt  DateTime @default(now())
+  expiresAt DateTime
+
+  @@unique([userId], where: { consumed: false }) // contrainte unique sur [userId + consumed: false] --> un seul token valide par utilisateur
+  @@map("refresh_tokens")
+}

@@ -1,0 +1,5 @@
+# Fins de ligne LF pour tous les fichiers texte (les scripts shell exécutés
+# dans les conteneurs Linux cassent avec des CRLF Windows)
+* text=auto eol=lf
+*.jpg binary
+*.png binary

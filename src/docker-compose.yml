@@ -1,0 +1,191 @@
+# Documentation de Docker compose : orchestration de conteneur
+# Sensible à l'indentation (comme en Python)
+
+services: # Liste des serveurs (nos conteneurs !)
+  # pour oquiz api
+  oquiz-database: # Nom de notre premier service (nom du conteneur dans le réseau !)
+    image: postgres:17 # Image permettant de créer le conteneur
+    restart: unless-stopped # Redémarre automatiquement mon service en cas de crash (sauf si je l'ai éteint manuellement)
+    networks:
+      - oquiz-network
+    volumes:
+      - oquiz-volume:/var/lib/postgresql/data # je monte mon volume oquiz-data dans mon conteneur, là où Postgres écrit par défaut ses données lorsqu'il manipule les tables
+    environment:
+      POSTGRES_USER: ${POSTGRES_OQUIZ_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_OQUIZ_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_OQUIZ_DB}
+    healthcheck: # pour être sûr que la BDD est bien opérationnelle
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 1s
+      timeout: 5s
+      retries: 10
+
+
+  # pour file-service
+  files-database:
+    image: postgres:17 # Image permettant de créer le conteneur
+    restart: unless-stopped # Redémarre automatiquement mon service en cas de crash (sauf si je l'ai éteint manuellement)
+    networks:
+      - oquiz-network
+    volumes:
+      - files-volume:/var/lib/postgresql/data # je monte mon volume oquiz-data dans mon conteneur, là où Postgres écrit par défaut ses données lorsqu'il manipule les tables
+    environment:
+      POSTGRES_USER: ${POSTGRES_FILES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_FILES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_FILES_DB}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 1s
+      timeout: 5s
+      retries: 10
+
+
+  mongodb:
+    image: mongo:8.0
+    restart: unless-stopped
+    environment:
+      # Contournement TCMalloc / noyaux Linux recents (SERVER-121912).
+      GLIBC_TUNABLES: glibc.pthread.rseq=1
+    networks:
+      - oquiz-network
+    volumes:
+      - mongodb-volume:/data/db
+
+
+  # Interface MongoDB accessible uniquement depuis la machine hôte
+  mongo-express:
+    image: mongo-express:latest
+    restart: unless-stopped
+    environment:
+      ME_CONFIG_MONGODB_URL: mongodb://mongodb:27017/
+      ME_CONFIG_BASICAUTH_ENABLED: "false"
+      ME_CONFIG_BASICAUTH: "false" # Compatibilité avec les versions antérieures
+    ports:
+      - ${MONGO_EXPRESS_PORT}:8081 
+    networks:
+      - oquiz-network
+    depends_on:
+      - mongodb
+
+
+  log-service:
+    build: ./log-service
+    restart: unless-stopped
+    environment:
+      PORT: 4000
+      MONGODB_URL: mongodb://mongodb:27017/log_service
+      MONGODB_COLLECTION: logs
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+    networks:
+      - oquiz-network
+    depends_on:
+      - mongodb
+
+
+  file-service:
+    build: ./file-service
+    restart: unless-stopped
+    environment:
+      PORT: 5000
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+      DATABASE_URL: ${FILES_DATABASE_URL}
+    volumes:
+      - ./file-service/uploads:/app/uploads
+    networks:
+      - oquiz-network
+    depends_on:
+      files-database:
+        condition: service_healthy # sûr que postgre est accessible avant de lancer les migrations
+
+
+  api:
+    build: # Plutôt que de partir d'une image existante, on demande à compose de générer l'image à partir de :
+      context: ./api # ce dossier
+      dockerfile: Dockerfile # le Dockerfile pour construire l'image de l'API
+    # image:                  # Pour partir d'une image existante, on pourrait plutôt utiliser cette syntaxe
+    #   oquiz-api             # Nom de l'image de laquelle on part (uploadée sur docker hub par exemple)
+    restart: unless-stopped # Redémarre automatiquement mon service en cas de crash (sauf si je l'ai éteint manuellement)
+    environment:
+      NODE_ENV: ${NODE_ENV}
+      PORT: 3000
+      DATABASE_URL: ${OQUIZ_DATABASE_URL} # On lit directement dans le conteneur (database) puisqu'on est sur le meme network = le port 5432 j'ai accès depuis cet autre conteneur
+      JWT_SECRET: ${JWT_SECRET}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+      LOG_LEVEL: http
+      LOG_SERVICE_HOST: log-service
+      LOG_SERVICE_PORT: 4000
+      FILE_SERVICE_HOST: file-service
+      FILE_SERVICE_PORT: 5000
+    networks:
+      - oquiz-network
+    depends_on:
+      log-service:
+        condition: service_started
+      file-service:
+        condition: service_started
+      oquiz-database:
+        condition: service_healthy # sûr que postgre est accessible avant de lancer les migrations
+
+
+  client: # le front
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+      args: # équivalent du --build-arg
+        - VITE_API_BASE_URL=${VITE_API_BASE_URL}
+    restart: unless-stopped
+    depends_on:
+      - api
+    networks:
+      - oquiz-network
+
+
+  # Service complémentaire : pour visualiser et manipuler la BDD via une interface graphique
+  adminer:
+    image: adminer
+    restart: unless-stopped
+    ports:
+      - ${ADMINER_LOCAL_PORT}:8080
+    depends_on:
+      - oquiz-database
+      - files-database
+    networks:
+      - oquiz-network
+
+
+  # Reverse proxy nginx
+  proxy:
+    image: nginx:alpine
+    restart: unless-stopped
+    volumes:
+      # On monte notre modèle de config de reverse proxy HORS de conf.d : Nginx charge tout fichier conf.d/*.conf,
+      # il chargerait sinon le modèle brut (avec les ${VARIABLES} non remplacées). Le entrypoint génère conf.d/oquiz.conf à partir de ce modèle
+      - ./proxy-service/nginx.template.conf:/etc/nginx/templates/oquiz.conf.template:ro
+      # script exécuté au démarrage du container
+      - ./proxy-service/entrypoint.sh:/entrypoint.sh
+      # certificats utilisés pour HTTPS
+      - ./proxy-service/certs:/etc/nginx/certs:ro
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+    ports:
+      # 443 port le HTTPS
+      - 443:443
+    environment:
+      # variables d'environement
+      - CLIENT_SERVER_NAME=${CLIENT_SERVER_NAME}
+      - API_SERVER_NAME=${API_SERVER_NAME}
+    depends_on:
+      - api
+      - client
+    networks:
+      - oquiz-network
+
+
+networks: # Liste des réseaux
+  oquiz-network: # Nom du réseau
+
+
+volumes: # Liste de nos volumes
+  oquiz-volume: # Volume pour la persistance des données de la BDD (sur l'hôte, au cas où le conteneur est supprimé, les données restent !)
+  files-volume:
+  mongodb-volume:
+  # Note : on aurait pu mettre un dosier local comme `./oquiz-data` que l'on ajoute au gitignore

@@ -1,0 +1,53 @@
+{
+  "name": "file-service",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.ts",
+  "scripts": {
+    "docker:db-start": "docker compose -f ./docker-compose.yml --env-file=.env.docker up -d",
+    "docker:db-stop": "docker compose -f ./docker-compose.yml --env-file=.env.docker down",
+    "======= Pour le dev ========": "========================",
+    "dev": "tsx --watch --env-file=.env index.ts",
+    "======= Pour la BDD ========": "========================",
+    "db:migrate:dev": "prisma migrate dev",
+    "db:migrate:deploy": "prisma migrate deploy",
+    "db:migrate:reset": "prisma migrate reset --force",
+    "db:generate": "prisma generate",
+    "db:seed": "tsx --env-file=.env ./src/models/seeding.ts",
+    "db:reset": "npm run db:migrate:reset && npm run db:seed",
+    "db:studio": "prisma studio",
+    "======= Pour les tests ========": "========================",
+    "test:spec": "npx tsx --test --env-file=./test/config/.env.test --import ./test/config/global-setup.ts --experimental-test-isolation=none ./**/*.spec.test.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "@prisma/adapter-pg": "^7.10.0",
+    "@prisma/client": "^7.10.0",
+    "axios": "^1.20.0",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "express-xss-sanitizer": "^2.0.2",
+    "formidable": "^3.5.4",
+    "helmet": "^8.3.0",
+    "sharp": "^0.35.4",
+    "tsx": "^4.23.15",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/express-xss-sanitizer": "^2.0.0",
+    "@types/formidable": "^3.5.1",
+    "@types/node": "^26.6.2",
+    "eslint": "^10.10.0",
+    "nodemon": "^3.1.14",
+    "prisma": "^7.10.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.70.0"
+  }
+}

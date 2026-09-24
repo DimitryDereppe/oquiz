@@ -1,0 +1,12 @@
+node_modules
+dist
+prisma/generated
+uploads
+logs
+*.log
+.env
+.env.*
+.git
+coverage
+test
+**/*.test.ts

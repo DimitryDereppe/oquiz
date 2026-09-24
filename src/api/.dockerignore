@@ -1,0 +1,5 @@
+# Permet de spécifier les dossier et fichiers que je ne veux pas envoyer dans mon conteneur
+dist
+node_modules
+generated
+.env

@@ -1,0 +1,5 @@
+.env.docker
+.env.test
+
+uploads/
+/generated/prisma
