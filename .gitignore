@@ -154,3 +154,4 @@ vite.config.ts.timestamp-*
 # Carnet de bord du travail sur ce dépôt portfolio : journal personnel,
 # jamais publié (même choix que pour okanban/pokedex)
 CARNET-DE-BORD-PORTFOLIO.md
+.claude/
